@@ -54,244 +54,240 @@ class _HomeState extends State<Home> {
         valueListenable: Hive.box<Clock>("clock").listenable(),
         builder: (context, box, widget) {
           var clockList = (box as Box<Clock>).values.toList();
-          return Container(
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 60,
-                      height: 60,
-                      child: IconButton(
-                          onPressed: () async {
-                            await showDialog(
-                                context: context,
-                                builder: (BuildContext context) {
-                                  var hasError = false;
-                                  var advice = "";
-                                  return StatefulBuilder(
-                                      builder: (context, setState) {
-                                    var textController =
-                                        TextEditingController();
+          var toolBar = Row(
+            children: [
+              IconButton(
+                  onPressed: () async {
+                    await showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          var hasError = false;
+                          var advice = "";
+                          return StatefulBuilder(builder: (context, setState) {
+                            var textController = TextEditingController();
 
-                                    showAdvice(String text) {
-                                      setState(() {
-                                        hasError = true;
-                                        advice = text;
-                                      });
-                                    }
+                            showAdvice(String text) {
+                              setState(() {
+                                hasError = true;
+                                advice = text;
+                              });
+                            }
 
-                                    return AlertDialog(
-                                      title: Text("添加时钟"),
-                                      content: Column(
-                                        children: [
-                                          TextField(
-                                            controller: textController,
-                                            decoration: new InputDecoration(
-                                              hintText: '名称',
-                                            ),
-                                          ),
-                                          Container(
-                                            child: Visibility(
-                                              child: Text(
-                                                advice,
-                                                style: TextStyle(
-                                                    color: Colors.red),
-                                              ),
-                                              visible: hasError,
-                                            ),
-                                            margin: EdgeInsets.fromLTRB(
-                                                0, 20, 0, 0),
-                                          )
-                                        ],
-                                        mainAxisSize: MainAxisSize.min,
+                            return AlertDialog(
+                              title: const Text("添加时钟"),
+                              content: Column(
+                                children: [
+                                  TextField(
+                                    controller: textController,
+                                    decoration: const InputDecoration(
+                                      hintText: '名称',
+                                    ),
+                                  ),
+                                  Container(
+                                    child: Visibility(
+                                      child: Text(
+                                        advice,
+                                        style:
+                                            const TextStyle(color: Colors.red),
                                       ),
-                                      actions: <Widget>[
-                                        TextButton(
-                                          child: Text("确定"),
-                                          onPressed: () {
-                                            var clockList = box.values.toList();
-                                            var name = textController.text;
-                                            if (name.isEmpty) {
-                                              showAdvice("名称不能为空");
-                                              return;
-                                            }
-                                            var duplicate = clockList.any(
-                                                (element) =>
-                                                    element.name == name);
-                                            if (duplicate) {
-                                              showAdvice("名称不能重复");
-                                              return;
-                                            }
-                                            var clock =
-                                                Clock(name: name, records: []);
-                                            box.add(clock);
-                                            Navigator.of(context).pop();
-                                          },
-                                        ),
-                                      ],
-                                    );
-                                  });
-                                });
-                          },
-                          icon: Icon(
-                            Icons.add,
-                            size: 30,
-                          )),
+                                      visible: hasError,
+                                    ),
+                                    margin:
+                                        const EdgeInsets.fromLTRB(0, 20, 0, 0),
+                                  )
+                                ],
+                                mainAxisSize: MainAxisSize.min,
+                              ),
+                              actions: <Widget>[
+                                TextButton(
+                                  child: const Text("确定"),
+                                  onPressed: () {
+                                    var clockList = box.values.toList();
+                                    var name = textController.text;
+                                    if (name.isEmpty) {
+                                      showAdvice("名称不能为空");
+                                      return;
+                                    }
+                                    var duplicate = clockList
+                                        .any((element) => element.name == name);
+                                    if (duplicate) {
+                                      showAdvice("名称不能重复");
+                                      return;
+                                    }
+                                    var clock = Clock(name: name, records: []);
+                                    box.add(clock);
+                                    Navigator.of(context).pop();
+                                  },
+                                ),
+                              ],
+                            );
+                          });
+                        });
+                  },
+                  icon: const Icon(
+                    Icons.add,
+                    size: 30,
+                  )),
+            ],
+            mainAxisAlignment: MainAxisAlignment.end,
+          );
+          var clockDetailList = Expanded(
+              child: ListView.builder(
+            itemCount: clockList.length,
+            shrinkWrap: true,
+            itemBuilder: (context, index) {
+              var clock = clockList[index];
+              var time = 0;
+              clock.records.forEach((element) {
+                time += element.end.difference(element.start).inMilliseconds;
+              });
+
+              var row = Container(
+                child: Row(
+                  children: [
+                    Text(
+                      "${clock.name}",
+                      style: const TextStyle(fontSize: 20),
+                    ),
+                    Text(
+                      "${formatTime(time)}",
+                      style: const TextStyle(fontSize: 20),
                     ),
                   ],
-                  mainAxisAlignment: MainAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 ),
-                Expanded(
-                    child: ListView.builder(
-                  itemCount: clockList.length,
-                  shrinkWrap: true,
-                  itemBuilder: (context, index) {
-                    var clock = clockList[index];
-                    var time = 0;
-                    clock.records.forEach((element) {
-                      time +=
-                          element.end.difference(element.start).inMilliseconds;
-                    });
+                padding:
+                    const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                color: Colors.grey[200],
+              );
 
-                    var row = Container(
-                      child: Container(
-                          child: Row(
-                        children: [
-                          Text(
-                            "${clock.name}",
-                            style: TextStyle(fontSize: 20),
-                          ),
-                          Text(
-                            "${formatTime(time)}",
-                            style: TextStyle(fontSize: 20),
-                          ),
-                        ],
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      )),
-                      padding:
-                          EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-                      color: Colors.grey[200],
-                    );
+              var slider = Slidable(
+                actionPane: const SlidableBehindActionPane(),
+                controller: sliderController,
+                actionExtentRatio: 0.2,
+                child: GestureDetector(
+                    child: row,
+                    onTap: () async {
+                      var result =
+                          await Navigator.of(context).push(MaterialPageRoute(
+                        builder: (context) => Timer(),
+                      ));
+                      if (result is Record) {
+                        clock.records.add(result);
+                        int index = box.values.toList().indexOf(clock);
+                        box.putAt(index, clock);
+                      }
+                    }),
+                secondaryActions: <Widget>[
+                  IconSlideAction(
+                    caption: '编辑',
+                    color: Colors.blue.shade400,
+                    icon: Icons.edit,
+                    foregroundColor: Colors.white,
+                    onTap: () async {
+                      await showDialog(
+                          context: context,
+                          builder: (BuildContext context) {
+                            var hasError = false;
+                            var advice = "";
+                            return StatefulBuilder(
+                                builder: (context, setState) {
+                              var textController = TextEditingController();
 
-                    var slider = Slidable(
-                      actionPane: SlidableBehindActionPane(),
-                      controller: sliderController,
-                      actionExtentRatio: 0.2,
-                      child: GestureDetector(
-                          child: row,
-                          onTap: () async {
-                            var result = await Navigator.of(context)
-                                .push(MaterialPageRoute(
-                              builder: (context) => Timer(),
-                            ));
-                            if (result is Record) {
-                              clock.records.add(result);
-                              int index = box.values.toList().indexOf(clock);
-                              box.putAt(index, clock);
-                            }
-                          }),
-                      secondaryActions: <Widget>[
-                        IconSlideAction(
-                          caption: '编辑',
-                          color: Colors.blue.shade400,
-                          icon: Icons.edit,
-                          foregroundColor: Colors.white,
-                          onTap: () async {
-                            await showDialog(
-                                context: context,
-                                builder: (BuildContext context) {
-                                  var hasError = false;
-                                  var advice = "";
-                                  return StatefulBuilder(
-                                      builder: (context, setState) {
-                                    var textController =
-                                        TextEditingController();
-
-                                    showAdvice(String text) {
-                                      setState(() {
-                                        hasError = true;
-                                        advice = text;
-                                      });
-                                    }
-
-                                    return AlertDialog(
-                                      title: Text("修改名称"),
-                                      content: Column(
-                                        children: [
-                                          TextField(
-                                            controller: textController,
-                                            decoration: new InputDecoration(
-                                              hintText: clock.name,
-                                            ),
-                                          ),
-                                          Container(
-                                            child: Visibility(
-                                              child: Text(
-                                                advice,
-                                                style: TextStyle(
-                                                    color: Colors.red),
-                                              ),
-                                              visible: hasError,
-                                            ),
-                                            margin: EdgeInsets.fromLTRB(
-                                                0, 20, 0, 0),
-                                          )
-                                        ],
-                                        mainAxisSize: MainAxisSize.min,
-                                      ),
-                                      actions: <Widget>[
-                                        TextButton(
-                                          child: Text("确定"),
-                                          onPressed: () {
-                                            var clockList = box.values.toList();
-                                            var name = textController.text;
-                                            if (name == clock.name) {
-                                              showAdvice("名称未改变");
-                                              return;
-                                            }
-                                            if (name.isEmpty) {
-                                              showAdvice("名称不能为空");
-                                              return;
-                                            }
-                                            var duplicate = clockList.any(
-                                                (element) =>
-                                                    element.name == name);
-                                            if (duplicate) {
-                                              showAdvice("名称不能重复");
-                                              return;
-                                            }
-                                            int index = box.values
-                                                .toList()
-                                                .indexOf(clock);
-                                            clock.name = name;
-                                            box.putAt(index, clock);
-                                            Navigator.of(context).pop();
-                                          },
-                                        ),
-                                      ],
-                                    );
-                                  });
+                              showAdvice(String text) {
+                                setState(() {
+                                  hasError = true;
+                                  advice = text;
                                 });
-                          },
-                        ),
-                        IconSlideAction(
-                          caption: '删除',
-                          color: Colors.red.shade400,
-                          icon: Icons.delete,
-                          onTap: () {
-                            int index = box.values.toList().indexOf(clock);
-                            box.deleteAt(index);
-                          },
-                        ),
-                      ],
-                    );
+                              }
 
-                    return slider;
-                  },
-                ))
-              ],
+                              return AlertDialog(
+                                title: const Text("修改名称"),
+                                content: Column(
+                                  children: [
+                                    TextField(
+                                      controller: textController,
+                                      decoration: InputDecoration(
+                                        hintText: clock.name,
+                                      ),
+                                    ),
+                                    Container(
+                                      child: Visibility(
+                                        child: Text(
+                                          advice,
+                                          style: const TextStyle(
+                                              color: Colors.red),
+                                        ),
+                                        visible: hasError,
+                                      ),
+                                      margin: const EdgeInsets.fromLTRB(
+                                          0, 20, 0, 0),
+                                    )
+                                  ],
+                                  mainAxisSize: MainAxisSize.min,
+                                ),
+                                actions: <Widget>[
+                                  TextButton(
+                                    child: const Text("确定"),
+                                    onPressed: () {
+                                      var clockList = box.values.toList();
+                                      var name = textController.text;
+                                      if (name == clock.name) {
+                                        showAdvice("名称未改变");
+                                        return;
+                                      }
+                                      if (name.isEmpty) {
+                                        showAdvice("名称不能为空");
+                                        return;
+                                      }
+                                      var duplicate = clockList.any(
+                                          (element) => element.name == name);
+                                      if (duplicate) {
+                                        showAdvice("名称不能重复");
+                                        return;
+                                      }
+                                      int index =
+                                          box.values.toList().indexOf(clock);
+                                      clock.name = name;
+                                      box.putAt(index, clock);
+                                      Navigator.of(context).pop();
+                                    },
+                                  ),
+                                ],
+                              );
+                            });
+                          });
+                    },
+                  ),
+                  IconSlideAction(
+                    caption: '删除',
+                    color: Colors.red.shade400,
+                    icon: Icons.delete,
+                    onTap: () {
+                      int index = box.values.toList().indexOf(clock);
+                      box.deleteAt(index);
+                    },
+                  ),
+                ],
+              );
+
+              return slider;
+            },
+          ));
+          var emptyContent = Expanded(
+              child: Container(
+            child: Text(
+              "什么都没有",
+              style: TextStyle(fontSize: 30, color: Colors.grey[300]),
             ),
+            alignment: Alignment.center,
+          ));
+
+          return Column(
+            children: [
+              toolBar,
+              if (clockList.isEmpty) emptyContent else clockDetailList
+            ],
           );
         });
   }
@@ -303,7 +299,7 @@ class Timer extends StatefulWidget {
 }
 
 class _TimerState extends State<Timer> {
-  var start;
+  late DateTime start;
 
   var timer = StopWatchTimer(
     mode: StopWatchMode.countUp,
@@ -331,13 +327,13 @@ class _TimerState extends State<Timer> {
                 padding: const EdgeInsets.all(8),
                 child: Text(
                   displayTime,
-                  style: TextStyle(
+                  style: const TextStyle(
                       fontSize: 40,
                       color: Colors.white,
                       decoration: TextDecoration.none),
                 ),
               ),
-              SizedBox(
+              const SizedBox(
                 height: 100,
               ),
               Row(
@@ -346,7 +342,7 @@ class _TimerState extends State<Timer> {
                     style: ElevatedButton.styleFrom(
                       primary: Colors.red,
                       padding: const EdgeInsets.all(20),
-                      shape: CircleBorder(),
+                      shape: const CircleBorder(),
                     ),
                     onPressed: () {
                       if (start is DateTime) {
@@ -369,11 +365,11 @@ class _TimerState extends State<Timer> {
                     style: ElevatedButton.styleFrom(
                       primary: Colors.green,
                       padding: const EdgeInsets.all(20),
-                      shape: CircleBorder(),
+                      shape: const CircleBorder(),
                     ),
                     onPressed: () {
                       timer.onExecute.add(StopWatchExecute.start);
-                      this.start = DateTime.now();
+                      start = DateTime.now();
                     },
                     child: const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16),
