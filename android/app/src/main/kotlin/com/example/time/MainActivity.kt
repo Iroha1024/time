@@ -1,4 +1,4 @@
-package com.example.time
+package com.iroha.time
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.time">
+    package="com.iroha.time">
    <application
         android:label="time"
         android:icon="@mipmap/ic_launcher">
