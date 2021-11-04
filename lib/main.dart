@@ -1,9 +1,13 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:stop_watch_timer/stop_watch_timer.dart';
+import 'package:ext_storage/ext_storage.dart';
 
 import 'package:time/hive/index.dart';
 
@@ -26,7 +30,6 @@ class _AppState extends State<App> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Home(),
-      appBar: AppBar(),
     );
   }
 }
@@ -56,6 +59,53 @@ class _HomeState extends State<Home> {
           var clockList = (box as Box<Clock>).values.toList();
           var toolBar = Row(
             children: [
+              Row(
+                children: [
+                  IconButton(
+                      onPressed: () async {
+                        FilePicker.platform.clearTemporaryFiles();
+                        FilePickerResult? result =
+                            await FilePicker.platform.pickFiles();
+                        String str;
+                        if (result != null) {
+                          File file = File(result.files.single.path!);
+                          str = await file.readAsString();
+                        } else {
+                          return;
+                        }
+                        List json = jsonDecode(str);
+                        List<Clock> clockList =
+                            json.map((e) => Clock.fromJson(e)).toList();
+                        await box.clear();
+                        box.addAll(clockList);
+                      },
+                      icon: Icon(
+                        Icons.import_contacts,
+                        size: 30,
+                      )),
+                  IconButton(
+                      onPressed: () async {
+                        var map = Hive.box<Clock>('clock')
+                            .values
+                            .toList()
+                            .map((e) => e.toJson())
+                            .toList();
+                        String json = jsonEncode(map);
+
+                        var path =
+                            await ExtStorage.getExternalStoragePublicDirectory(
+                                    ExtStorage.DIRECTORY_DOWNLOADS) +
+                                "/storage.json";
+
+                        File file = File(path);
+                        file.writeAsString(json);
+                      },
+                      icon: Icon(
+                        Icons.download,
+                        size: 30,
+                      )),
+                ],
+              ),
               IconButton(
                   onPressed: () async {
                     await showDialog(
@@ -129,7 +179,7 @@ class _HomeState extends State<Home> {
                     size: 30,
                   )),
             ],
-            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
           );
           var clockDetailList = Expanded(
               child: ListView.builder(
@@ -138,15 +188,15 @@ class _HomeState extends State<Home> {
             itemBuilder: (context, index) {
               var clock = clockList[index];
               var time = 0;
-              clock.records.forEach((element) {
+              for (var element in clock.records) {
                 time += element.end.difference(element.start).inMilliseconds;
-              });
+              }
 
               var row = Container(
                 child: Row(
                   children: [
                     Text(
-                      "${clock.name}",
+                      clock.name,
                       style: const TextStyle(fontSize: 20),
                     ),
                     Text(
@@ -299,7 +349,8 @@ class Timer extends StatefulWidget {
 }
 
 class _TimerState extends State<Timer> {
-  late DateTime start;
+  var start;
+  bool isEnd = false;
 
   var timer = StopWatchTimer(
     mode: StopWatchMode.countUp,
@@ -313,81 +364,90 @@ class _TimerState extends State<Timer> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<int>(
-      stream: timer.rawTime,
-      initialData: 0,
-      builder: (context, snap) {
-        final value = snap.data;
-        final displayTime = StopWatchTimer.getDisplayTime(value ?? 0);
+    return WillPopScope(
+        child: StreamBuilder<int>(
+          stream: timer.rawTime,
+          initialData: 0,
+          builder: (context, snap) {
+            final value = snap.data;
+            final displayTime = StopWatchTimer.getDisplayTime(value ?? 0);
 
-        return Container(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text(
-                  displayTime,
-                  style: const TextStyle(
-                      fontSize: 40,
-                      color: Colors.white,
-                      decoration: TextDecoration.none),
-                ),
-              ),
-              const SizedBox(
-                height: 100,
-              ),
-              Row(
+            return Container(
+              child: Column(
                 children: [
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      primary: Colors.red,
-                      padding: const EdgeInsets.all(20),
-                      shape: const CircleBorder(),
-                    ),
-                    onPressed: () {
-                      if (start is DateTime) {
-                        timer.onExecute.add(StopWatchExecute.stop);
-                        var record = Record(start: start, end: DateTime.now());
-                        Navigator.of(context).pop(record);
-                      } else {
-                        Navigator.of(context).pop();
-                      }
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        '结束',
-                        style: TextStyle(color: Colors.white, fontSize: 24),
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      displayTime,
+                      style: const TextStyle(
+                          fontSize: 40,
+                          color: Colors.white,
+                          decoration: TextDecoration.none),
                     ),
                   ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      primary: Colors.green,
-                      padding: const EdgeInsets.all(20),
-                      shape: const CircleBorder(),
-                    ),
-                    onPressed: () {
-                      timer.onExecute.add(StopWatchExecute.start);
-                      start = DateTime.now();
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        '开始',
-                        style: TextStyle(color: Colors.white, fontSize: 24),
+                  const SizedBox(
+                    height: 100,
+                  ),
+                  Row(
+                    children: [
+                      TimerButton(
+                        color: Colors.red,
+                        onPressed: () {
+                          if (start is DateTime) {
+                            timer.onExecute.add(StopWatchExecute.stop);
+                            var record =
+                                Record(start: start, end: DateTime.now());
+                            isEnd = true;
+                            Navigator.of(context).pop(record);
+                          } else {
+                            Navigator.of(context).pop();
+                          }
+                        },
+                        text: '结束',
                       ),
-                    ),
+                      TimerButton(
+                        color: Colors.green,
+                        onPressed: () {
+                          timer.onExecute.add(StopWatchExecute.start);
+                          start = DateTime.now();
+                        },
+                        text: '开始',
+                      )
+                    ],
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   )
                 ],
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              )
-            ],
-            mainAxisAlignment: MainAxisAlignment.center,
-          ),
-          color: Colors.black,
-        );
-      },
+                mainAxisAlignment: MainAxisAlignment.center,
+              ),
+              color: Colors.black,
+            );
+          },
+        ),
+        onWillPop: () async => isEnd);
+  }
+}
+
+class TimerButton extends StatelessWidget {
+  final MaterialColor color;
+  final VoidCallback onPressed;
+  final String text;
+
+  const TimerButton(
+      {required this.color, required this.onPressed, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        primary: color,
+        padding: const EdgeInsets.all(30),
+        shape: const CircleBorder(),
+      ),
+      onPressed: onPressed,
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white, fontSize: 20),
+      ),
     );
   }
 }

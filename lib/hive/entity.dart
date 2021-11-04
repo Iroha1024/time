@@ -11,6 +11,16 @@ class Clock {
   List<Record> records;
 
   Clock({required this.name, required this.records});
+
+  Clock.fromJson(Map<String, dynamic> json)
+      : name = json["name"],
+        records =
+            (json["records"] as List).map((e) => Record.fromJson(e)).toList();
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'records': records.map((e) => e.toJson()).toList(),
+      };
 }
 
 @HiveType(typeId: 1)
@@ -22,4 +32,13 @@ class Record {
   DateTime end;
 
   Record({required this.start, required this.end});
+
+  Record.fromJson(Map<String, dynamic> json)
+      : start = DateTime.parse(json["start"]),
+        end = DateTime.parse(json["end"]);
+
+  Map<String, dynamic> toJson() => {
+        'start': start.toString(),
+        'end': end.toString(),
+      };
 }

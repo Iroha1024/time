@@ -38,6 +38,8 @@ dependencies:
   hive_flutter:
   flutter_slidable:
   stop_watch_timer:
+  ext_storage:
+  file_picker:
 
 dev_dependencies:
   flutter_test:
