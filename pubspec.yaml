@@ -40,6 +40,8 @@ dependencies:
   stop_watch_timer:
   ext_storage:
   file_picker:
+  fluttertoast: ^8.0.8
+  permission_handler: ^8.2.6
 
 dev_dependencies:
   flutter_test:

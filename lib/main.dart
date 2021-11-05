@@ -8,6 +8,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:stop_watch_timer/stop_watch_timer.dart';
 import 'package:ext_storage/ext_storage.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'package:time/hive/index.dart';
 
@@ -50,13 +52,59 @@ formatTime(int millisecond) {
   return "$h时$m分$s秒";
 }
 
+enum ToastColor { success, fail }
+
 class _HomeState extends State<Home> {
+  late FToast fToast;
+
+  @override
+  void initState() {
+    super.initState();
+    fToast = FToast();
+    fToast.init(context);
+  }
+
+  _showToast(String text, ToastColor status) {
+    Color color;
+    switch (status) {
+      case ToastColor.success:
+        color = Colors.green[300]!;
+        break;
+      case ToastColor.fail:
+        color = Colors.red[300]!;
+        break;
+    }
+
+    Widget toast = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(5),
+        color: color,
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white),
+      ),
+    );
+
+    fToast.showToast(
+        child: toast,
+        toastDuration: const Duration(seconds: 1),
+        positionedToastBuilder: (context, child) {
+          return child;
+        });
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder(
         valueListenable: Hive.box<Clock>("clock").listenable(),
         builder: (context, box, widget) {
           var clockList = (box as Box<Clock>).values.toList();
+
+          var statusBar = SizedBox(
+            height: MediaQuery.of(context).padding.top,
+          );
           var toolBar = Row(
             children: [
               Row(
@@ -73,24 +121,37 @@ class _HomeState extends State<Home> {
                         } else {
                           return;
                         }
-                        List json = jsonDecode(str);
-                        List<Clock> clockList =
-                            json.map((e) => Clock.fromJson(e)).toList();
+                        List<Clock> clockList;
+                        try {
+                          List json = jsonDecode(str);
+                          clockList =
+                              json.map((e) => Clock.fromJson(e)).toList();
+                        } catch (e) {
+                          _showToast("导入失败，文件格式错误", ToastColor.fail);
+                          return;
+                        }
                         await box.clear();
                         box.addAll(clockList);
+                        _showToast("导入成功", ToastColor.success);
                       },
-                      icon: Icon(
+                      icon: const Icon(
                         Icons.import_contacts,
                         size: 30,
                       )),
                   IconButton(
                       onPressed: () async {
-                        var map = Hive.box<Clock>('clock')
+                        var status = await Permission.storage.status;
+                        if (!status.isGranted) {
+                          await Permission.storage.request();
+                        }
+
+                        var clockList = Hive.box<Clock>('clock')
                             .values
                             .toList()
                             .map((e) => e.toJson())
                             .toList();
-                        String json = jsonEncode(map);
+                        var encoder = const JsonEncoder.withIndent("  ");
+                        String json = encoder.convert(clockList);
 
                         var path =
                             await ExtStorage.getExternalStoragePublicDirectory(
@@ -98,9 +159,15 @@ class _HomeState extends State<Home> {
                                 "/storage.json";
 
                         File file = File(path);
-                        file.writeAsString(json);
+                        try {
+                          await file.writeAsString(json);
+                        } catch (e) {
+                          _showToast("导出失败", ToastColor.fail);
+                          return;
+                        }
+                        _showToast("导出成功", ToastColor.success);
                       },
-                      icon: Icon(
+                      icon: const Icon(
                         Icons.download,
                         size: 30,
                       )),
@@ -335,6 +402,7 @@ class _HomeState extends State<Home> {
 
           return Column(
             children: [
+              statusBar,
               toolBar,
               if (clockList.isEmpty) emptyContent else clockDetailList
             ],
@@ -428,7 +496,7 @@ class _TimerState extends State<Timer> {
 }
 
 class TimerButton extends StatelessWidget {
-  final MaterialColor color;
+  final Color color;
   final VoidCallback onPressed;
   final String text;
 
