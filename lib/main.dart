@@ -7,9 +7,11 @@ import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:stop_watch_timer/stop_watch_timer.dart';
-import 'package:ext_storage/ext_storage.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:downloads_path_provider_28/downloads_path_provider_28.dart';
+import 'package:syncfusion_flutter_calendar/calendar.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:time/hive/index.dart';
 
@@ -19,42 +21,55 @@ void main() async {
     theme: ThemeData(platform: TargetPlatform.iOS),
     home: App(),
     debugShowCheckedModeBanner: false,
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+    ],
+    supportedLocales: const [
+      Locale('zh', 'CH'),
+    ],
+    locale: const Locale('zh'),
   ));
 }
 
-class App extends StatefulWidget {
-  @override
-  State<StatefulWidget> createState() => _AppState();
-}
-
-class _AppState extends State<App> {
+class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Home(),
+      body: View(
+        child: HomeView(),
+      ),
     );
   }
 }
 
-class Home extends StatefulWidget {
+class View extends StatelessWidget {
+  Widget child;
+  View({required this.child});
+
   @override
-  State<StatefulWidget> createState() => _HomeState();
+  Widget build(BuildContext context) {
+    var statusBar = SizedBox(
+      height: MediaQuery.of(context).padding.top,
+    );
+    return Container(
+      child: Column(
+        children: [statusBar, Expanded(child: child)],
+      ),
+      color: Colors.transparent,
+    );
+  }
 }
 
-var sliderController = SlidableController();
-
-formatTime(int millisecond) {
-  int s = (millisecond / 1000).floor();
-  int h = (s / 3600).floor();
-  s = s % 3600;
-  int m = (s / 60).floor();
-  s = s % 60;
-  return "$h时$m分$s秒";
+class HomeView extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() => _HomeViewState();
 }
 
 enum ToastColor { success, fail }
 
-class _HomeState extends State<Home> {
+class _HomeViewState extends State<HomeView> {
+  var sliderController = SlidableController();
   late FToast fToast;
 
   @override
@@ -62,6 +77,15 @@ class _HomeState extends State<Home> {
     super.initState();
     fToast = FToast();
     fToast.init(context);
+  }
+
+  _formatTime(int millisecond) {
+    int s = (millisecond / 1000).floor();
+    int h = (s / 3600).floor();
+    s = s % 3600;
+    int m = (s / 60).floor();
+    s = s % 60;
+    return "$h时$m分$s秒";
   }
 
   _showToast(String text, ToastColor status) {
@@ -102,9 +126,6 @@ class _HomeState extends State<Home> {
         builder: (context, box, widget) {
           var clockList = (box as Box<Clock>).values.toList();
 
-          var statusBar = SizedBox(
-            height: MediaQuery.of(context).padding.top,
-          );
           var toolBar = Row(
             children: [
               Row(
@@ -153,10 +174,11 @@ class _HomeState extends State<Home> {
                         var encoder = const JsonEncoder.withIndent("  ");
                         String json = encoder.convert(clockList);
 
+                        var downloadsDirectory =
+                            DownloadsPathProvider.downloadsDirectory;
+
                         var path =
-                            await ExtStorage.getExternalStoragePublicDirectory(
-                                    ExtStorage.DIRECTORY_DOWNLOADS) +
-                                "/storage.json";
+                            (await downloadsDirectory)!.path + "/storage.json";
 
                         File file = File(path);
                         try {
@@ -215,7 +237,7 @@ class _HomeState extends State<Home> {
                                 ],
                                 mainAxisSize: MainAxisSize.min,
                               ),
-                              actions: <Widget>[
+                              actions: [
                                 TextButton(
                                   child: const Text("确定"),
                                   onPressed: () {
@@ -249,148 +271,171 @@ class _HomeState extends State<Home> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
           );
           var clockDetailList = Expanded(
-              child: ListView.builder(
-            itemCount: clockList.length,
-            shrinkWrap: true,
-            itemBuilder: (context, index) {
-              var clock = clockList[index];
-              var time = 0;
-              for (var element in clock.records) {
-                time += element.end.difference(element.start).inMilliseconds;
-              }
-
-              var row = Container(
-                child: Row(
-                  children: [
-                    Text(
-                      clock.name,
-                      style: const TextStyle(fontSize: 20),
-                    ),
-                    Text(
-                      "${formatTime(time)}",
-                      style: const TextStyle(fontSize: 20),
-                    ),
-                  ],
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                ),
-                padding:
-                    const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-                color: Colors.grey[200],
-              );
-
-              var slider = Slidable(
-                actionPane: const SlidableBehindActionPane(),
-                controller: sliderController,
-                actionExtentRatio: 0.2,
-                child: GestureDetector(
-                    child: row,
-                    onTap: () async {
-                      var result =
-                          await Navigator.of(context).push(MaterialPageRoute(
-                        builder: (context) => Timer(),
-                      ));
-                      if (result is Record) {
-                        clock.records.add(result);
-                        int index = box.values.toList().indexOf(clock);
-                        box.putAt(index, clock);
+              child: MediaQuery.removePadding(
+                  context: context,
+                  removeTop: true,
+                  child: ListView.builder(
+                    itemCount: clockList.length,
+                    shrinkWrap: true,
+                    itemBuilder: (context, index) {
+                      var clock = clockList[index];
+                      var time = 0;
+                      for (var element in clock.records) {
+                        time += element.end
+                            .difference(element.start)
+                            .inMilliseconds;
                       }
-                    }),
-                secondaryActions: <Widget>[
-                  IconSlideAction(
-                    caption: '编辑',
-                    color: Colors.blue.shade400,
-                    icon: Icons.edit,
-                    foregroundColor: Colors.white,
-                    onTap: () async {
-                      await showDialog(
-                          context: context,
-                          builder: (BuildContext context) {
-                            var hasError = false;
-                            var advice = "";
-                            return StatefulBuilder(
-                                builder: (context, setState) {
-                              var textController = TextEditingController();
 
-                              showAdvice(String text) {
-                                setState(() {
-                                  hasError = true;
-                                  advice = text;
-                                });
+                      var row = Container(
+                        child: Row(
+                          children: [
+                            Text(
+                              clock.name,
+                              style: const TextStyle(fontSize: 20),
+                            ),
+                            Text(
+                              "${_formatTime(time)}",
+                              style: const TextStyle(fontSize: 20),
+                            ),
+                          ],
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 20),
+                        color: Colors.grey[200],
+                      );
+
+                      var slider = Slidable(
+                        actionPane: const SlidableBehindActionPane(),
+                        controller: sliderController,
+                        actionExtentRatio: 0.2,
+                        child: GestureDetector(
+                            child: row,
+                            onTap: () async {
+                              var result = await Navigator.of(context)
+                                  .push(MaterialPageRoute(
+                                builder: (context) => TimerView(),
+                              ));
+                              if (result is Record) {
+                                clock.records.add(result);
+                                int index = box.values.toList().indexOf(clock);
+                                box.putAt(index, clock);
                               }
-
-                              return AlertDialog(
-                                title: const Text("修改名称"),
-                                content: Column(
-                                  children: [
-                                    TextField(
-                                      controller: textController,
-                                      decoration: InputDecoration(
-                                        hintText: clock.name,
-                                      ),
-                                    ),
-                                    Container(
-                                      child: Visibility(
-                                        child: Text(
-                                          advice,
-                                          style: const TextStyle(
-                                              color: Colors.red),
-                                        ),
-                                        visible: hasError,
-                                      ),
-                                      margin: const EdgeInsets.fromLTRB(
-                                          0, 20, 0, 0),
-                                    )
-                                  ],
-                                  mainAxisSize: MainAxisSize.min,
+                            }),
+                        actions: [
+                          IconSlideAction(
+                            caption: '统计',
+                            color: Colors.green,
+                            icon: Icons.query_builder,
+                            onTap: () {
+                              Navigator.of(context).push(MaterialPageRoute(
+                                builder: (context) => StatisticsMonthView(
+                                  clock: clock,
                                 ),
-                                actions: <Widget>[
-                                  TextButton(
-                                    child: const Text("确定"),
-                                    onPressed: () {
-                                      var clockList = box.values.toList();
-                                      var name = textController.text;
-                                      if (name == clock.name) {
-                                        showAdvice("名称未改变");
-                                        return;
-                                      }
-                                      if (name.isEmpty) {
-                                        showAdvice("名称不能为空");
-                                        return;
-                                      }
-                                      var duplicate = clockList.any(
-                                          (element) => element.name == name);
-                                      if (duplicate) {
-                                        showAdvice("名称不能重复");
-                                        return;
-                                      }
-                                      int index =
-                                          box.values.toList().indexOf(clock);
-                                      clock.name = name;
-                                      box.putAt(index, clock);
-                                      Navigator.of(context).pop();
-                                    },
-                                  ),
-                                ],
-                              );
-                            });
-                          });
-                    },
-                  ),
-                  IconSlideAction(
-                    caption: '删除',
-                    color: Colors.red.shade400,
-                    icon: Icons.delete,
-                    onTap: () {
-                      int index = box.values.toList().indexOf(clock);
-                      box.deleteAt(index);
-                    },
-                  ),
-                ],
-              );
+                              ));
+                            },
+                          ),
+                        ],
+                        secondaryActions: [
+                          IconSlideAction(
+                            caption: '编辑',
+                            color: Colors.blue.shade400,
+                            icon: Icons.edit,
+                            foregroundColor: Colors.white,
+                            onTap: () async {
+                              await showDialog(
+                                  context: context,
+                                  builder: (BuildContext context) {
+                                    var hasError = false;
+                                    var advice = "";
+                                    return StatefulBuilder(
+                                        builder: (context, setState) {
+                                      var textController =
+                                          TextEditingController();
 
-              return slider;
-            },
-          ));
+                                      showAdvice(String text) {
+                                        setState(() {
+                                          hasError = true;
+                                          advice = text;
+                                        });
+                                      }
+
+                                      return AlertDialog(
+                                        title: const Text("修改名称"),
+                                        content: Column(
+                                          children: [
+                                            TextField(
+                                              controller: textController,
+                                              decoration: InputDecoration(
+                                                hintText: clock.name,
+                                              ),
+                                            ),
+                                            Container(
+                                              child: Visibility(
+                                                child: Text(
+                                                  advice,
+                                                  style: const TextStyle(
+                                                      color: Colors.red),
+                                                ),
+                                                visible: hasError,
+                                              ),
+                                              margin: const EdgeInsets.fromLTRB(
+                                                  0, 20, 0, 0),
+                                            )
+                                          ],
+                                          mainAxisSize: MainAxisSize.min,
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            child: const Text("确定"),
+                                            onPressed: () {
+                                              var clockList =
+                                                  box.values.toList();
+                                              var name = textController.text;
+                                              if (name == clock.name) {
+                                                showAdvice("名称未改变");
+                                                return;
+                                              }
+                                              if (name.isEmpty) {
+                                                showAdvice("名称不能为空");
+                                                return;
+                                              }
+                                              var duplicate = clockList.any(
+                                                  (element) =>
+                                                      element.name == name);
+                                              if (duplicate) {
+                                                showAdvice("名称不能重复");
+                                                return;
+                                              }
+                                              int index = box.values
+                                                  .toList()
+                                                  .indexOf(clock);
+                                              clock.name = name;
+                                              box.putAt(index, clock);
+                                              Navigator.of(context).pop();
+                                            },
+                                          ),
+                                        ],
+                                      );
+                                    });
+                                  });
+                            },
+                          ),
+                          IconSlideAction(
+                            caption: '删除',
+                            color: Colors.red.shade400,
+                            icon: Icons.delete,
+                            onTap: () {
+                              int index = box.values.toList().indexOf(clock);
+                              box.deleteAt(index);
+                            },
+                          ),
+                        ],
+                      );
+
+                      return slider;
+                    },
+                  )));
           var emptyContent = Expanded(
               child: Container(
             child: Text(
@@ -402,21 +447,20 @@ class _HomeState extends State<Home> {
 
           return Column(
             children: [
-              statusBar,
               toolBar,
-              if (clockList.isEmpty) emptyContent else clockDetailList
+              clockList.isEmpty ? emptyContent : clockDetailList
             ],
           );
         });
   }
 }
 
-class Timer extends StatefulWidget {
+class TimerView extends StatefulWidget {
   @override
-  State<StatefulWidget> createState() => _TimerState();
+  State<StatefulWidget> createState() => _TimerViewState();
 }
 
-class _TimerState extends State<Timer> {
+class _TimerViewState extends State<TimerView> {
   var start;
   bool isEnd = false;
 
@@ -515,6 +559,196 @@ class TimerButton extends StatelessWidget {
       child: Text(
         text,
         style: const TextStyle(color: Colors.white, fontSize: 20),
+      ),
+    );
+  }
+}
+
+class StatisticsMonthView extends StatefulWidget {
+  Clock clock;
+
+  StatisticsMonthView({required this.clock});
+
+  State<StatefulWidget> createState() => _StatisticsMonthViewState();
+}
+
+class _StatisticsMonthViewState extends State<StatisticsMonthView> {
+  DateTime selectionTime = DateTime.now();
+
+  bool _isSameDay(
+    DateTime time1,
+    DateTime time2,
+  ) =>
+      DateTime(time1.year, time1.month, time1.day) ==
+      DateTime(time2.year, time2.month, time2.day);
+
+  _formatTime(DateTime time) {
+    String h =
+        time.hour < 10 ? "0" + time.hour.toString() : time.hour.toString();
+    String m = time.minute < 10
+        ? "0" + time.minute.toString()
+        : time.minute.toString();
+    String s = time.second < 10
+        ? "0" + time.second.toString()
+        : time.second.toString();
+    return "$h:$m:$s";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    var calendar = SfCalendar(
+      view: CalendarView.month,
+      showDatePickerButton: true,
+      headerStyle:
+          const CalendarHeaderStyle(textStyle: TextStyle(fontSize: 24)),
+      headerHeight: 60,
+      viewHeaderStyle: const ViewHeaderStyle(
+        dayTextStyle: TextStyle(color: Colors.black, fontSize: 20),
+      ),
+      viewHeaderHeight: 50,
+      selectionDecoration: const BoxDecoration(),
+      monthCellBuilder: (BuildContext buildContext, MonthCellDetails details) {
+        var date = details.date;
+        var current = DateTime(date.year, date.month, date.day);
+        var currentMonth =
+            details.visibleDates[details.visibleDates.length ~/ 2].month;
+        bool isSameMonth = currentMonth == date.month;
+        bool hasRecord = widget.clock.records
+            .where((e) => _isSameDay(date, e.start) || _isSameDay(date, e.end))
+            .isNotEmpty;
+        var cell = Column(
+          children: [
+            Text(
+              details.date.day.toString(),
+              style: TextStyle(
+                  decoration: TextDecoration.none,
+                  fontSize: 18,
+                  color: isSameMonth
+                      ? _isSameDay(today, current)
+                          ? Colors.white
+                          : Colors.black
+                      : Colors.grey,
+                  fontWeight: FontWeight.normal),
+            ),
+            const SizedBox(
+              height: 5,
+            ),
+            if (hasRecord)
+              Container(
+                decoration: const BoxDecoration(
+                    shape: BoxShape.circle, color: Colors.green),
+                width: 8,
+                height: 8,
+              )
+          ],
+          mainAxisAlignment: MainAxisAlignment.center,
+        );
+        return Container(
+          child: isSameMonth && _isSameDay(today, current)
+              ? Container(
+                  child: cell,
+                  decoration: const BoxDecoration(
+                      shape: BoxShape.circle, color: Colors.blue),
+                )
+              : _isSameDay(selectionTime, current)
+                  ? Container(
+                      child: cell,
+                      decoration: BoxDecoration(
+                          shape: BoxShape.circle, color: Colors.cyan[200]!),
+                    )
+                  : cell,
+        );
+      },
+      onTap: (CalendarTapDetails details) {
+        if (details.targetElement == CalendarElement.calendarCell) {
+          setState(() {
+            selectionTime = details.date!;
+          });
+        }
+      },
+    );
+
+    var recordList = widget.clock.records
+        .where((e) =>
+            _isSameDay(e.start, selectionTime) ||
+            _isSameDay(e.end, selectionTime))
+        .toList();
+    var content = recordList.isNotEmpty
+        ? Row(
+            children: [
+              Container(
+                child: Column(
+                  children: [
+                    Text(
+                      "${selectionTime.month.toString()}月${selectionTime.day.toString()}日",
+                      style: const TextStyle(
+                          decoration: TextDecoration.none,
+                          fontSize: 24,
+                          color: Colors.black,
+                          fontWeight: FontWeight.normal),
+                    )
+                  ],
+                ),
+                margin: const EdgeInsets.fromLTRB(10, 0, 20, 0),
+              ),
+              Expanded(
+                child: MediaQuery.removePadding(
+                  context: context,
+                  removeTop: true,
+                  child: ListView.builder(
+                      itemCount: recordList.length,
+                      shrinkWrap: true,
+                      itemBuilder: (context, index) {
+                        var record = recordList[index];
+                        return Container(
+                          child: Text(
+                            "${_formatTime(record.start)}-${_formatTime(record.end)}",
+                            style: const TextStyle(
+                                fontSize: 20,
+                                color: Colors.white,
+                                decoration: TextDecoration.none),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 10),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(5),
+                            color: Colors.green,
+                          ),
+                        );
+                      }),
+                ),
+              )
+            ],
+            crossAxisAlignment: CrossAxisAlignment.start,
+          )
+        : const Center(
+            child: Text(
+            "无记录",
+            style: TextStyle(
+                fontSize: 24,
+                color: Colors.grey,
+                decoration: TextDecoration.none),
+          ));
+
+    return View(
+      child: Column(
+        children: [
+          Expanded(
+            child: calendar,
+            flex: 2,
+          ),
+          Expanded(
+            child: Container(
+              child: content,
+              color: Colors.grey[100],
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+            ),
+          )
+        ],
       ),
     );
   }
