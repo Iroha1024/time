@@ -45,18 +45,17 @@ class App extends StatelessWidget {
 
 class View extends StatelessWidget {
   Widget child;
+
   View({required this.child});
 
   @override
   Widget build(BuildContext context) {
-    var statusBar = SizedBox(
+    var statusBar = Container(
       height: MediaQuery.of(context).padding.top,
-    );
-    return Container(
-      child: Column(
-        children: [statusBar, Expanded(child: child)],
-      ),
       color: Colors.transparent,
+    );
+    return Column(
+      children: [statusBar, Expanded(child: child)],
     );
   }
 }
@@ -544,7 +543,7 @@ class TimerButton extends StatelessWidget {
   final VoidCallback onPressed;
   final String text;
 
-  const TimerButton(
+  TimerButton(
       {required this.color, required this.onPressed, required this.text});
 
   @override
@@ -596,160 +595,174 @@ class _StatisticsMonthViewState extends State<StatisticsMonthView> {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    return OrientationBuilder(builder: (context, orientation) {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
 
-    var calendar = SfCalendar(
-      view: CalendarView.month,
-      showDatePickerButton: true,
-      headerStyle:
-          const CalendarHeaderStyle(textStyle: TextStyle(fontSize: 24)),
-      headerHeight: 60,
-      viewHeaderStyle: const ViewHeaderStyle(
-        dayTextStyle: TextStyle(color: Colors.black, fontSize: 20),
-      ),
-      viewHeaderHeight: 50,
-      selectionDecoration: const BoxDecoration(),
-      monthCellBuilder: (BuildContext buildContext, MonthCellDetails details) {
-        var date = details.date;
-        var current = DateTime(date.year, date.month, date.day);
-        var currentMonth =
-            details.visibleDates[details.visibleDates.length ~/ 2].month;
-        bool isSameMonth = currentMonth == date.month;
-        bool hasRecord = widget.clock.records
-            .where((e) => _isSameDay(date, e.start) || _isSameDay(date, e.end))
-            .isNotEmpty;
-        var cell = Column(
-          children: [
-            Text(
-              details.date.day.toString(),
-              style: TextStyle(
-                  decoration: TextDecoration.none,
-                  fontSize: 18,
-                  color: isSameMonth
-                      ? _isSameDay(today, current)
-                          ? Colors.white
-                          : Colors.black
-                      : Colors.grey,
-                  fontWeight: FontWeight.normal),
-            ),
-            const SizedBox(
-              height: 5,
-            ),
-            if (hasRecord)
-              Container(
-                decoration: const BoxDecoration(
-                    shape: BoxShape.circle, color: Colors.green),
-                width: 8,
-                height: 8,
-              )
-          ],
-          mainAxisAlignment: MainAxisAlignment.center,
-        );
-        return Container(
-          child: isSameMonth && _isSameDay(today, current)
-              ? Container(
-                  child: cell,
-                  decoration: const BoxDecoration(
-                      shape: BoxShape.circle, color: Colors.blue),
-                )
-              : _isSameDay(selectionTime, current)
-                  ? Container(
-                      child: cell,
-                      decoration: BoxDecoration(
-                          shape: BoxShape.circle, color: Colors.cyan[200]!),
-                    )
-                  : cell,
-        );
-      },
-      onTap: (CalendarTapDetails details) {
-        if (details.targetElement == CalendarElement.calendarCell) {
-          setState(() {
-            selectionTime = details.date!;
-          });
-        }
-      },
-    );
-
-    var recordList = widget.clock.records
-        .where((e) =>
-            _isSameDay(e.start, selectionTime) ||
-            _isSameDay(e.end, selectionTime))
-        .toList();
-    var content = recordList.isNotEmpty
-        ? Row(
+      var calendar = SfCalendar(
+        view: CalendarView.month,
+        showDatePickerButton: true,
+        headerDateFormat: "yM",
+        headerStyle:
+            const CalendarHeaderStyle(textStyle: TextStyle(fontSize: 24)),
+        headerHeight: 60,
+        viewHeaderStyle: const ViewHeaderStyle(
+          dayTextStyle: TextStyle(color: Colors.black, fontSize: 20),
+        ),
+        viewHeaderHeight: 50,
+        selectionDecoration: const BoxDecoration(),
+        monthCellBuilder:
+            (BuildContext buildContext, MonthCellDetails details) {
+          var date = details.date;
+          var current = DateTime(date.year, date.month, date.day);
+          var currentMonth =
+              details.visibleDates[details.visibleDates.length ~/ 2].month;
+          bool isSameMonth = currentMonth == date.month;
+          bool hasRecord = widget.clock.records
+              .where(
+                  (e) => _isSameDay(date, e.start) || _isSameDay(date, e.end))
+              .isNotEmpty;
+          var cell = Column(
             children: [
-              Container(
-                child: Column(
-                  children: [
-                    Text(
-                      "${selectionTime.month.toString()}月${selectionTime.day.toString()}日",
-                      style: const TextStyle(
-                          decoration: TextDecoration.none,
-                          fontSize: 24,
-                          color: Colors.black,
-                          fontWeight: FontWeight.normal),
-                    )
-                  ],
-                ),
-                margin: const EdgeInsets.fromLTRB(10, 0, 20, 0),
+              Text(
+                details.date.day.toString(),
+                style: TextStyle(
+                    decoration: TextDecoration.none,
+                    fontSize: 18,
+                    color: isSameMonth
+                        ? _isSameDay(today, current)
+                            ? Colors.white
+                            : Colors.black
+                        : Colors.grey,
+                    fontWeight: FontWeight.normal),
               ),
-              Expanded(
-                child: MediaQuery.removePadding(
-                  context: context,
-                  removeTop: true,
-                  child: ListView.builder(
-                      itemCount: recordList.length,
-                      shrinkWrap: true,
-                      itemBuilder: (context, index) {
-                        var record = recordList[index];
-                        return Container(
-                          child: Text(
-                            "${_formatTime(record.start)}-${_formatTime(record.end)}",
-                            style: const TextStyle(
-                                fontSize: 20,
-                                color: Colors.white,
-                                decoration: TextDecoration.none),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 10),
-                          margin: const EdgeInsets.only(bottom: 10),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(5),
-                            color: Colors.green,
-                          ),
-                        );
-                      }),
-                ),
-              )
+              const SizedBox(
+                height: 5,
+              ),
+              if (hasRecord)
+                Container(
+                  decoration: const BoxDecoration(
+                      shape: BoxShape.circle, color: Colors.green),
+                  width: 8,
+                  height: 8,
+                )
             ],
-            crossAxisAlignment: CrossAxisAlignment.start,
-          )
-        : const Center(
-            child: Text(
-            "无记录",
-            style: TextStyle(
-                fontSize: 24,
-                color: Colors.grey,
-                decoration: TextDecoration.none),
-          ));
+            mainAxisAlignment: MainAxisAlignment.center,
+          );
+          return Container(
+            child: isSameMonth && _isSameDay(today, current)
+                ? Container(
+                    child: cell,
+                    decoration: const BoxDecoration(
+                        shape: BoxShape.circle, color: Colors.blue),
+                  )
+                : _isSameDay(selectionTime, current)
+                    ? Container(
+                        child: cell,
+                        decoration: BoxDecoration(
+                            shape: BoxShape.circle, color: Colors.cyan[200]!),
+                      )
+                    : cell,
+          );
+        },
+        onTap: (CalendarTapDetails details) {
+          if (details.targetElement == CalendarElement.calendarCell) {
+            setState(() {
+              selectionTime = details.date!;
+            });
+          }
+        },
+      );
 
-    return View(
-      child: Column(
-        children: [
-          Expanded(
-            child: calendar,
-            flex: 2,
+      var recordList = widget.clock.records
+          .where((e) =>
+              _isSameDay(e.start, selectionTime) ||
+              _isSameDay(e.end, selectionTime))
+          .toList();
+
+      var title = Container(
+        child: Text(
+          "${selectionTime.month.toString()}月${selectionTime.day.toString()}日",
+          style: const TextStyle(
+              decoration: TextDecoration.none,
+              fontSize: 24,
+              color: Colors.black,
+              fontWeight: FontWeight.normal),
+        ),
+        margin: const EdgeInsets.fromLTRB(10, 0, 20, 10),
+      );
+      var recordDetailList = Expanded(
+        child: MediaQuery.removePadding(
+          context: context,
+          removeTop: true,
+          child: ListView.builder(
+              itemCount: recordList.length,
+              shrinkWrap: true,
+              itemBuilder: (context, index) {
+                var record = recordList[index];
+                return Container(
+                  child: Text(
+                    "${_formatTime(record.start)}-${_formatTime(record.end)}",
+                    style: const TextStyle(
+                        fontSize: 18,
+                        color: Colors.white,
+                        decoration: TextDecoration.none,
+                        letterSpacing: 2),
+                  ),
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(5),
+                    color: Colors.green,
+                  ),
+                );
+              }),
+        ),
+      );
+
+      var content = recordList.isNotEmpty
+          ? orientation == Orientation.portrait
+              ? Row(
+                  children: [title, recordDetailList],
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                )
+              : Column(
+                  children: [title, recordDetailList],
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                )
+          : const Center(
+              child: Text(
+              "无记录",
+              style: TextStyle(
+                  fontSize: 24,
+                  color: Colors.grey,
+                  decoration: TextDecoration.none),
+            ));
+
+      var children = [
+        Expanded(
+          child: calendar,
+          flex: 2,
+        ),
+        Expanded(
+          child: Container(
+            child: content,
+            color: Colors.grey[100],
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
           ),
-          Expanded(
-            child: Container(
-              child: content,
-              color: Colors.grey[100],
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-            ),
-          )
-        ],
-      ),
-    );
+        )
+      ];
+
+      return Scaffold(
+        body: orientation == Orientation.portrait
+            ? Column(
+                children: children,
+              )
+            : Row(
+                children: children,
+              ),
+        appBar: AppBar(),
+      );
+    });
   }
 }
