@@ -45,6 +45,10 @@ dependencies:
   permission_handler: ^8.2.6
   downloads_path_provider_28: ^0.1.2
   syncfusion_flutter_calendar: ^19.3.48
+  dio: ^4.0.3
+  get: ^4.3.8
+  flutter_login: ^3.0.0
+  shared_preferences: ^2.0.8
 
 dev_dependencies:
   flutter_test:

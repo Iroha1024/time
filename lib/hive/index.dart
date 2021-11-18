@@ -8,4 +8,5 @@ Future initHive() async {
   Hive.registerAdapter(ClockAdapter());
   Hive.registerAdapter(RecordAdapter());
   await Hive.openBox<Clock>("clock");
+  await Hive.openBox<Activity>("activity");
 }

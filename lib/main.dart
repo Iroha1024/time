@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -13,17 +14,22 @@ import 'package:downloads_path_provider_28/downloads_path_provider_28.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_login/flutter_login.dart';
 
+import 'package:time/api/index.dart';
 import 'package:time/hive/index.dart';
+import 'package:time/local_storage.dart';
+import 'package:time/api/url.dart' as url;
 
 void main() async {
   await initHive();
+  var box = Hive.box<Activity>("activity");
+  print(box.values.toList());
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]);
-  runApp(MaterialApp(
+  runApp(GetMaterialApp(
     theme: ThemeData(platform: TargetPlatform.iOS),
-    home: App(),
     debugShowCheckedModeBanner: false,
     localizationsDelegates: const [
       GlobalMaterialLocalizations.delegate,
@@ -33,16 +39,19 @@ void main() async {
       Locale('zh', 'CH'),
     ],
     locale: const Locale('zh'),
+    initialRoute: "/",
+    routes: {
+      '/': (context) => App(),
+      '/login': (context) => LoginView(),
+    },
   ));
 }
 
 class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: View(
-        child: HomeView(),
-      ),
+    return View(
+      child: HomeView(),
     );
   }
 }
@@ -64,9 +73,49 @@ class View extends StatelessWidget {
             body: child,
             appBar: AppBar(),
           )
-        : Column(
-            children: [statusBar, Expanded(child: child)],
+        : Scaffold(
+            body: Column(
+              children: [statusBar, Expanded(child: child)],
+            ),
           );
+  }
+}
+
+class LoginView extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return FlutterLogin(
+      title: 'TIME',
+      // logo: AssetImage('assets/images/ecorp.png'),
+      onLogin: (data) async {
+        var success = await loginStorage(data.name, data.password);
+        if (success) {
+          Get.toNamed("/");
+        }
+      },
+      onSignup: (_) => Future.delayed(Duration.zero),
+      // onSubmitAnimationCompleted: () {
+      //   Navigator.of(context).pushReplacement(MaterialPageRoute(
+      //     builder: (context) => DashboardScreen(),
+      //   ));
+      // },
+      onRecoverPassword: (_) => Future.delayed(Duration.zero),
+      userValidator: (_) => null,
+      messages: LoginMessages(
+        userHint: '用户名',
+        passwordHint: '密码',
+        confirmPasswordHint: '再次输入密码',
+        loginButton: '登录',
+        signupButton: '注册',
+        forgotPasswordButton: '忘记密码',
+        recoverPasswordButton: 'HELP ME',
+        goBackButton: 'GO BACK',
+        confirmPasswordError: 'Not match!',
+        recoverPasswordDescription:
+            'Lorem Ipsum is simply dummy text of the printing and typesetting industry',
+        recoverPasswordSuccess: 'Password rescued successfully',
+      ),
+    );
   }
 }
 
@@ -249,7 +298,7 @@ class _HomeViewState extends State<HomeView> {
                               actions: [
                                 TextButton(
                                   child: const Text("确定"),
-                                  onPressed: () {
+                                  onPressed: () async {
                                     var clockList = box.values.toList();
                                     var name = textController.text;
                                     if (name.isEmpty) {
@@ -263,6 +312,19 @@ class _HomeViewState extends State<HomeView> {
                                       return;
                                     }
                                     var clock = Clock(name: name, records: []);
+                                    try {
+                                      var data =
+                                          (await createClock(clock.name)).data;
+                                      if (data["code"] == 0) {
+                                        clock.id = data["data"]["clock"]["id"];
+                                      }
+                                    } catch (e) {
+                                      var box = Hive.box<Activity>("activity");
+                                      box.add(Activity(
+                                          path: url.clock,
+                                          method: "POST",
+                                          data: {"name": clock.name}));
+                                    }
                                     box.add(clock);
                                     Navigator.of(context).pop();
                                   },
@@ -326,6 +388,24 @@ class _HomeViewState extends State<HomeView> {
                                 builder: (context) => TimerView(),
                               ));
                               if (result is Record) {
+                                try {
+                                  var data = (await createRecord(
+                                          result.start, result.end, clock.id))
+                                      .data;
+                                  if (data["code"] == 0) {
+                                    clock.id = data["data"]["record"]["id"];
+                                  }
+                                } catch (e) {
+                                  var box = Hive.box<Activity>("activity");
+                                  box.add(Activity(
+                                      path: url.record,
+                                      method: "POST",
+                                      data: {
+                                        "start": result.start.toString(),
+                                        "end": result.end.toString(),
+                                        "clockId": clock.id,
+                                      }));
+                                }
                                 clock.records.add(result);
                                 int index = box.values.toList().indexOf(clock);
                                 box.putAt(index, clock);
@@ -397,7 +477,7 @@ class _HomeViewState extends State<HomeView> {
                                         actions: [
                                           TextButton(
                                             child: const Text("确定"),
-                                            onPressed: () {
+                                            onPressed: () async {
                                               var clockList =
                                                   box.values.toList();
                                               var name = textController.text;
@@ -420,6 +500,21 @@ class _HomeViewState extends State<HomeView> {
                                                   .toList()
                                                   .indexOf(clock);
                                               clock.name = name;
+
+                                              try {
+                                                await updateClock(
+                                                    clock.id, clock.name);
+                                              } catch (e) {
+                                                var box = Hive.box<Activity>(
+                                                    "activity");
+                                                box.add(Activity(
+                                                    path:
+                                                        "${url.clock}/${clock.id}",
+                                                    method: "PATCH",
+                                                    data: {
+                                                      "name": clock.name
+                                                    }));
+                                              }
                                               box.putAt(index, clock);
                                               Navigator.of(context).pop();
                                             },
@@ -434,7 +529,16 @@ class _HomeViewState extends State<HomeView> {
                             caption: '删除',
                             color: Colors.red.shade400,
                             icon: Icons.delete,
-                            onTap: () {
+                            onTap: () async {
+                              try {
+                                await deleteClock(clock.id);
+                              } catch (e) {
+                                var box = Hive.box<Activity>("activity");
+                                box.add(Activity(
+                                  path: "${url.clock}/${clock.id}",
+                                  method: "DELETE",
+                                ));
+                              }
                               int index = box.values.toList().indexOf(clock);
                               box.deleteAt(index);
                             },
@@ -493,7 +597,8 @@ class _TimerViewState extends State<TimerView> {
             final value = snap.data;
             final displayTime = StopWatchTimer.getDisplayTime(value ?? 0);
 
-            return Container(
+            return View(
+                child: Container(
               child: Column(
                 children: [
                   Padding(
@@ -501,9 +606,9 @@ class _TimerViewState extends State<TimerView> {
                     child: Text(
                       displayTime,
                       style: const TextStyle(
-                          fontSize: 40,
-                          color: Colors.white,
-                          decoration: TextDecoration.none),
+                        fontSize: 40,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                   const SizedBox(
@@ -541,7 +646,7 @@ class _TimerViewState extends State<TimerView> {
                 mainAxisAlignment: MainAxisAlignment.center,
               ),
               color: Colors.black,
-            );
+            ));
           },
         ),
         onWillPop: () async => isEnd);
@@ -633,7 +738,6 @@ class _StatisticsMonthViewState extends State<StatisticsMonthView> {
             Text(
               details.date.day.toString(),
               style: TextStyle(
-                  decoration: TextDecoration.none,
                   fontSize: 18,
                   color: isSameMonth
                       ? _isSameDay(today, current)
@@ -694,7 +798,6 @@ class _StatisticsMonthViewState extends State<StatisticsMonthView> {
                     Text(
                       "${selectionTime.month.toString()}月${selectionTime.day.toString()}日",
                       style: const TextStyle(
-                          decoration: TextDecoration.none,
                           fontSize: 24,
                           color: Colors.black,
                           fontWeight: FontWeight.normal),
@@ -716,9 +819,9 @@ class _StatisticsMonthViewState extends State<StatisticsMonthView> {
                           child: Text(
                             "${_formatTime(record.start)}-${_formatTime(record.end)}",
                             style: const TextStyle(
-                                fontSize: 20,
-                                color: Colors.white,
-                                decoration: TextDecoration.none),
+                              fontSize: 20,
+                              color: Colors.white,
+                            ),
                           ),
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 10),
@@ -738,9 +841,9 @@ class _StatisticsMonthViewState extends State<StatisticsMonthView> {
             child: Text(
             "无记录",
             style: TextStyle(
-                fontSize: 24,
-                color: Colors.grey,
-                decoration: TextDecoration.none),
+              fontSize: 24,
+              color: Colors.grey,
+            ),
           ));
 
     return View(
