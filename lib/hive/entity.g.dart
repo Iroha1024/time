@@ -18,9 +18,8 @@ class ClockAdapter extends TypeAdapter<Clock> {
     };
     return Clock(
       id: fields[0] as int,
-      name: fields[1] as String,
-      records: (fields[2] as List).cast<Record>(),
-    );
+      name: fields[2] as String,
+    )..localId = fields[1] as int;
   }
 
   @override
@@ -30,9 +29,9 @@ class ClockAdapter extends TypeAdapter<Clock> {
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
-      ..write(obj.name)
+      ..write(obj.localId)
       ..writeByte(2)
-      ..write(obj.records);
+      ..write(obj.name);
   }
 
   @override
@@ -58,21 +57,26 @@ class RecordAdapter extends TypeAdapter<Record> {
     };
     return Record(
       id: fields[0] as int,
-      start: fields[1] as DateTime,
-      end: fields[2] as DateTime,
-    );
+      start: fields[2] as DateTime,
+      end: fields[3] as DateTime,
+      clockId: fields[4] as int,
+    )..localId = fields[1] as int;
   }
 
   @override
   void write(BinaryWriter writer, Record obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
-      ..write(obj.start)
+      ..write(obj.localId)
       ..writeByte(2)
-      ..write(obj.end);
+      ..write(obj.start)
+      ..writeByte(3)
+      ..write(obj.end)
+      ..writeByte(4)
+      ..write(obj.clockId);
   }
 
   @override
@@ -100,14 +104,15 @@ class ActivityAdapter extends TypeAdapter<Activity> {
       path: fields[0] as String,
       method: fields[1] as String,
       data: (fields[2] as Map?)?.cast<dynamic, dynamic>(),
-      upload: fields[3] as bool,
+      target: fields[3] as int,
+      box: fields[4] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, Activity obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.path)
       ..writeByte(1)
@@ -115,7 +120,9 @@ class ActivityAdapter extends TypeAdapter<Activity> {
       ..writeByte(2)
       ..write(obj.data)
       ..writeByte(3)
-      ..write(obj.upload);
+      ..write(obj.target)
+      ..writeByte(4)
+      ..write(obj.box);
   }
 
   @override

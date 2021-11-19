@@ -2,25 +2,58 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:time/api/index.dart' as request;
 
-Future loadUserInfo() async {
+const username = "username";
+const token = "token";
+const activity = "activity";
+
+Future init() async {
   final prefs = await SharedPreferences.getInstance();
-  var username = prefs.getString("username") ?? "";
-  var token = prefs.getString("token") ?? "";
-  return {"username": username, "token": token};
+  if (!prefs.containsKey(username)) {
+    prefs.setString(username, "");
+  }
+  if (!prefs.containsKey(token)) {
+    prefs.setString(token, "");
+  }
+  if (!prefs.containsKey(activity)) {
+    prefs.setInt(activity, 0);
+  }
+  // await clear();
 }
 
-Future<bool> loginStorage(String username, String password) async {
+Future clear() async {
+  final prefs = await SharedPreferences.getInstance();
+  prefs.setString(username, "");
+  prefs.setString(token, "");
+  prefs.setInt(activity, 0);
+}
+
+Future<bool> login(String username, String password) async {
   var data = (await request.login(username, password)).data;
   if (data["code"] == 0) {
     final prefs = await SharedPreferences.getInstance();
-    prefs.setString("username", username);
-    prefs.setString("token", data["data"]);
+    prefs.setString(username, username);
+    prefs.setString(token, data["data"]);
     return true;
   }
   return false;
 }
 
-Future<String?> getToken() async {
+Future<String> getUserName() async {
   final prefs = await SharedPreferences.getInstance();
-  return prefs.getString("token");
+  return prefs.getString(username)!;
+}
+
+Future<String> getToken() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString(token)!;
+}
+
+Future setActivity(int id) async {
+  final prefs = await SharedPreferences.getInstance();
+  prefs.setInt(activity, id);
+}
+
+Future<int> getActivity() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getInt(activity)!;
 }

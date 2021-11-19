@@ -1,30 +1,26 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:stop_watch_timer/stop_watch_timer.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:downloads_path_provider_28/downloads_path_provider_28.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_login/flutter_login.dart';
 
 import 'package:time/api/index.dart';
-import 'package:time/hive/index.dart';
-import 'package:time/local_storage.dart';
+import 'package:time/hive/index.dart' as hive;
+import 'package:time/local_storage.dart' as storage;
 import 'package:time/api/url.dart' as url;
 
 void main() async {
-  await initHive();
-  var box = Hive.box<Activity>("activity");
-  print(box.values.toList());
+  await hive.initHive();
+  await storage.init();
+  // await hive.checkPush();
+  // await hive.checkPull();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]);
@@ -84,37 +80,73 @@ class View extends StatelessWidget {
 class LoginView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return FlutterLogin(
-      title: 'TIME',
-      // logo: AssetImage('assets/images/ecorp.png'),
-      onLogin: (data) async {
-        var success = await loginStorage(data.name, data.password);
-        if (success) {
-          Get.toNamed("/");
+    return FutureBuilder<String>(
+      future: storage.getUserName(),
+      builder: (BuildContext context, AsyncSnapshot snapshot) {
+        if (snapshot.connectionState == ConnectionState.done) {
+          return FlutterLogin(
+            title: 'TIME',
+            // logo: AssetImage('assets/images/ecorp.png'),
+            onLogin: (data) async {
+              var success = await storage.login(data.name, data.password);
+              if (success) {
+                Get.toNamed("/");
+              }
+            },
+            onSignup: (_) => Future.delayed(Duration.zero),
+            // onSubmitAnimationCompleted: () {
+            //   Navigator.of(context).pushReplacement(MaterialPageRoute(
+            //     builder: (context) => DashboardScreen(),
+            //   ));
+            // },
+            onRecoverPassword: (_) => Future.delayed(Duration.zero),
+            savedEmail: snapshot.data,
+            userValidator: (_) => null,
+            messages: LoginMessages(
+              userHint: '用户名',
+              passwordHint: '密码',
+              confirmPasswordHint: '再次输入密码',
+              loginButton: '登录',
+              signupButton: '注册',
+              forgotPasswordButton: '忘记密码',
+              recoverPasswordButton: 'HELP ME',
+              goBackButton: 'GO BACK',
+              confirmPasswordError: 'Not match!',
+              recoverPasswordDescription:
+                  'Lorem Ipsum is simply dummy text of the printing and typesetting industry',
+              recoverPasswordSuccess: 'Password rescued successfully',
+            ),
+          );
         }
+        return const CircularProgressIndicator();
       },
-      onSignup: (_) => Future.delayed(Duration.zero),
-      // onSubmitAnimationCompleted: () {
-      //   Navigator.of(context).pushReplacement(MaterialPageRoute(
-      //     builder: (context) => DashboardScreen(),
-      //   ));
-      // },
-      onRecoverPassword: (_) => Future.delayed(Duration.zero),
-      userValidator: (_) => null,
-      messages: LoginMessages(
-        userHint: '用户名',
-        passwordHint: '密码',
-        confirmPasswordHint: '再次输入密码',
-        loginButton: '登录',
-        signupButton: '注册',
-        forgotPasswordButton: '忘记密码',
-        recoverPasswordButton: 'HELP ME',
-        goBackButton: 'GO BACK',
-        confirmPasswordError: 'Not match!',
-        recoverPasswordDescription:
-            'Lorem Ipsum is simply dummy text of the printing and typesetting industry',
-        recoverPasswordSuccess: 'Password rescued successfully',
-      ),
+    );
+  }
+}
+
+class ValueListenableBuilder2<A, B> extends StatelessWidget {
+  ValueListenableBuilder2(
+    this.first,
+    this.second, {
+    required this.builder,
+  });
+
+  final ValueListenable<A> first;
+  final ValueListenable<B> second;
+  final Widget Function(BuildContext context, A a, B b) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<A>(
+      valueListenable: first,
+      builder: (_, a, __) {
+        return ValueListenableBuilder<B>(
+          valueListenable: second,
+          builder: (context, b, __) {
+            return builder(context, a, b);
+          },
+        );
+      },
     );
   }
 }
@@ -179,392 +211,347 @@ class _HomeViewState extends State<HomeView> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder(
-        valueListenable: Hive.box<Clock>("clock").listenable(),
-        builder: (context, box, widget) {
-          var clockList = (box as Box<Clock>).values.toList();
+    return ValueListenableBuilder2(
+        hive.getClockBox().listenable(), hive.getRecordBox().listenable(),
+        builder: (BuildContext context, clockBox, recordBox) {
+      var clockList = (clockBox as Box<hive.Clock>).values.toList();
 
-          var toolBar = Row(
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                      onPressed: () async {
-                        FilePicker.platform.clearTemporaryFiles();
-                        FilePickerResult? result =
-                            await FilePicker.platform.pickFiles();
-                        String str;
-                        if (result != null) {
-                          File file = File(result.files.single.path!);
-                          str = await file.readAsString();
-                        } else {
-                          return;
-                        }
-                        List<Clock> clockList;
-                        try {
-                          List json = jsonDecode(str);
-                          clockList =
-                              json.map((e) => Clock.fromJson(e)).toList();
-                        } catch (e) {
-                          _showToast("导入失败，文件格式错误", ToastColor.fail);
-                          return;
-                        }
-                        await box.clear();
-                        box.addAll(clockList);
-                        _showToast("导入成功", ToastColor.success);
-                      },
-                      icon: const Icon(
-                        Icons.import_contacts,
-                        size: 30,
-                      )),
-                  IconButton(
-                      onPressed: () async {
-                        var status = await Permission.storage.status;
-                        if (!status.isGranted) {
-                          await Permission.storage.request();
-                        }
+      var toolBar = Row(
+        children: [
+          IconButton(
+              onPressed: () async {
+                await showDialog(
+                    context: context,
+                    builder: (BuildContext context) {
+                      var hasError = false;
+                      var advice = "";
+                      return StatefulBuilder(builder: (context, setState) {
+                        var textController = TextEditingController();
 
-                        var clockList = Hive.box<Clock>('clock')
-                            .values
-                            .toList()
-                            .map((e) => e.toJson())
-                            .toList();
-                        var encoder = const JsonEncoder.withIndent("  ");
-                        String json = encoder.convert(clockList);
-
-                        var downloadsDirectory =
-                            DownloadsPathProvider.downloadsDirectory;
-
-                        var path =
-                            (await downloadsDirectory)!.path + "/storage.json";
-
-                        File file = File(path);
-                        try {
-                          await file.writeAsString(json);
-                        } catch (e) {
-                          _showToast("导出失败", ToastColor.fail);
-                          return;
-                        }
-                        _showToast("导出成功", ToastColor.success);
-                      },
-                      icon: const Icon(
-                        Icons.download,
-                        size: 30,
-                      )),
-                ],
-              ),
-              IconButton(
-                  onPressed: () async {
-                    await showDialog(
-                        context: context,
-                        builder: (BuildContext context) {
-                          var hasError = false;
-                          var advice = "";
-                          return StatefulBuilder(builder: (context, setState) {
-                            var textController = TextEditingController();
-
-                            showAdvice(String text) {
-                              setState(() {
-                                hasError = true;
-                                advice = text;
-                              });
-                            }
-
-                            return AlertDialog(
-                              title: const Text("添加时钟"),
-                              content: Column(
-                                children: [
-                                  TextField(
-                                    controller: textController,
-                                    decoration: const InputDecoration(
-                                      hintText: '名称',
-                                    ),
-                                  ),
-                                  Container(
-                                    child: Visibility(
-                                      child: Text(
-                                        advice,
-                                        style:
-                                            const TextStyle(color: Colors.red),
-                                      ),
-                                      visible: hasError,
-                                    ),
-                                    margin:
-                                        const EdgeInsets.fromLTRB(0, 20, 0, 0),
-                                  )
-                                ],
-                                mainAxisSize: MainAxisSize.min,
-                              ),
-                              actions: [
-                                TextButton(
-                                  child: const Text("确定"),
-                                  onPressed: () async {
-                                    var clockList = box.values.toList();
-                                    var name = textController.text;
-                                    if (name.isEmpty) {
-                                      showAdvice("名称不能为空");
-                                      return;
-                                    }
-                                    var duplicate = clockList
-                                        .any((element) => element.name == name);
-                                    if (duplicate) {
-                                      showAdvice("名称不能重复");
-                                      return;
-                                    }
-                                    var clock = Clock(name: name, records: []);
-                                    try {
-                                      var data =
-                                          (await createClock(clock.name)).data;
-                                      if (data["code"] == 0) {
-                                        clock.id = data["data"]["clock"]["id"];
-                                      }
-                                    } catch (e) {
-                                      var box = Hive.box<Activity>("activity");
-                                      box.add(Activity(
-                                          path: url.clock,
-                                          method: "POST",
-                                          data: {"name": clock.name}));
-                                    }
-                                    box.add(clock);
-                                    Navigator.of(context).pop();
-                                  },
-                                ),
-                              ],
-                            );
+                        showAdvice(String text) {
+                          setState(() {
+                            hasError = true;
+                            advice = text;
                           });
-                        });
-                  },
-                  icon: const Icon(
-                    Icons.add,
-                    size: 30,
-                  )),
-            ],
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          );
-          var clockDetailList = Expanded(
-              child: MediaQuery.removePadding(
-                  context: context,
-                  removeTop: true,
-                  child: ListView.builder(
-                    itemCount: clockList.length,
-                    shrinkWrap: true,
-                    itemBuilder: (context, index) {
-                      var clock = clockList[index];
-                      var time = 0;
-                      for (var element in clock.records) {
-                        time += element.end
-                            .difference(element.start)
-                            .inMilliseconds;
-                      }
+                        }
 
-                      var row = Container(
-                        child: Row(
-                          children: [
-                            Text(
-                              clock.name,
-                              style: const TextStyle(fontSize: 20),
-                            ),
-                            Text(
-                              "${_formatTime(time)}",
-                              style: const TextStyle(fontSize: 20),
-                            ),
-                          ],
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 10, horizontal: 20),
-                        color: Colors.grey[200],
-                      );
-
-                      var slider = Slidable(
-                        actionPane: const SlidableBehindActionPane(),
-                        controller: sliderController,
-                        actionExtentRatio: 0.2,
-                        child: GestureDetector(
-                            child: row,
-                            onTap: () async {
-                              var result = await Navigator.of(context)
-                                  .push(MaterialPageRoute(
-                                builder: (context) => TimerView(),
-                              ));
-                              if (result is Record) {
+                        return AlertDialog(
+                          title: const Text("添加时钟"),
+                          content: Column(
+                            children: [
+                              TextField(
+                                controller: textController,
+                                decoration: const InputDecoration(
+                                  hintText: '名称',
+                                ),
+                              ),
+                              Container(
+                                child: Visibility(
+                                  child: Text(
+                                    advice,
+                                    style: const TextStyle(color: Colors.red),
+                                  ),
+                                  visible: hasError,
+                                ),
+                                margin: const EdgeInsets.fromLTRB(0, 20, 0, 0),
+                              )
+                            ],
+                            mainAxisSize: MainAxisSize.min,
+                          ),
+                          actions: [
+                            TextButton(
+                              child: const Text("确定"),
+                              onPressed: () async {
+                                var clockList = clockBox.values.toList();
+                                var name = textController.text;
+                                if (name.isEmpty) {
+                                  showAdvice("名称不能为空");
+                                  return;
+                                }
+                                var duplicate = clockList
+                                    .any((element) => element.name == name);
+                                if (duplicate) {
+                                  showAdvice("名称不能重复");
+                                  return;
+                                }
+                                var clock = hive.Clock(
+                                  id: hive.generateId(hive.clock),
+                                  name: name,
+                                );
                                 try {
-                                  var data = (await createRecord(
-                                          result.start, result.end, clock.id))
-                                      .data;
-                                  if (data["code"] == 0) {
-                                    clock.id = data["data"]["record"]["id"];
+                                  var data =
+                                      (await createClock(clock.name)).data;
+                                  if (isSuccess(data)) {
+                                    clock.id = hive.getClockId(data);
+                                    await storage
+                                        .setActivity(getActivity(data));
                                   }
                                 } catch (e) {
-                                  var box = Hive.box<Activity>("activity");
-                                  box.add(Activity(
-                                      path: url.record,
-                                      method: "POST",
-                                      data: {
-                                        "start": result.start.toString(),
-                                        "end": result.end.toString(),
-                                        "clockId": clock.id,
-                                      }));
+                                  var box = hive.getActivityBox();
+                                  box.add(hive.Activity(
+                                      path: url.clock,
+                                      method: post,
+                                      data: {"name": clock.name},
+                                      target: clock.id,
+                                      box: hive.clock));
                                 }
-                                clock.records.add(result);
-                                int index = box.values.toList().indexOf(clock);
-                                box.putAt(index, clock);
+                                clockBox.add(clock);
+                                Navigator.of(context).pop();
+                              },
+                            ),
+                          ],
+                        );
+                      });
+                    });
+              },
+              icon: const Icon(
+                Icons.add,
+                size: 30,
+              )),
+        ],
+        mainAxisAlignment: MainAxisAlignment.end,
+      );
+      var clockDetailList = Expanded(
+          child: MediaQuery.removePadding(
+              context: context,
+              removeTop: true,
+              child: ListView.builder(
+                itemCount: clockList.length,
+                shrinkWrap: true,
+                itemBuilder: (context, index) {
+                  var clock = clockList[index];
+                  var time = 0;
+                  var recordList = hive
+                      .getRecordBox()
+                      .values
+                      .toList()
+                      .where((e) => e.clockId == clock.id)
+                      .toList();
+                  for (var element in recordList) {
+                    time +=
+                        element.end.difference(element.start).inMilliseconds;
+                  }
+
+                  var row = Container(
+                    child: Row(
+                      children: [
+                        Text(
+                          clock.name,
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                        Text(
+                          "${_formatTime(time)}",
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                      ],
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 10, horizontal: 20),
+                    color: Colors.grey[200],
+                  );
+
+                  var slider = Slidable(
+                    actionPane: const SlidableBehindActionPane(),
+                    controller: sliderController,
+                    actionExtentRatio: 0.2,
+                    child: GestureDetector(
+                        child: row,
+                        onTap: () async {
+                          var result = await Navigator.of(context)
+                              .push(MaterialPageRoute(
+                            builder: (context) => TimerView(),
+                          ));
+                          if (result != null) {
+                            var record = hive.Record(
+                                id: hive.generateId(hive.record),
+                                start: result["start"],
+                                end: result["end"],
+                                clockId: clock.id);
+
+                            try {
+                              var data = (await createRecord(
+                                      record.start, record.end, clock.id))
+                                  .data;
+                              if (isSuccess(data)) {
+                                record.id = hive.getRecordId(data);
+                                await storage.setActivity(getActivity(data));
                               }
-                            }),
-                        actions: [
-                          IconSlideAction(
-                            caption: '统计',
-                            color: Colors.green,
-                            icon: Icons.query_builder,
-                            onTap: () {
-                              Navigator.of(context).push(MaterialPageRoute(
-                                builder: (context) => StatisticsMonthView(
-                                  clock: clock,
-                                ),
-                              ));
-                            },
-                          ),
-                        ],
-                        secondaryActions: [
-                          IconSlideAction(
-                            caption: '编辑',
-                            color: Colors.blue.shade400,
-                            icon: Icons.edit,
-                            foregroundColor: Colors.white,
-                            onTap: () async {
-                              await showDialog(
-                                  context: context,
-                                  builder: (BuildContext context) {
-                                    var hasError = false;
-                                    var advice = "";
-                                    return StatefulBuilder(
-                                        builder: (context, setState) {
-                                      var textController =
-                                          TextEditingController();
+                            } catch (e) {
+                              var box = hive.getActivityBox();
+                              box.add(hive.Activity(
+                                  path: url.record,
+                                  method: post,
+                                  data: {
+                                    "start": record.start.toString(),
+                                    "end": record.end.toString(),
+                                    "clockId": clock.id,
+                                  },
+                                  target: record.id,
+                                  box: hive.record));
+                            }
+                            var box = hive.getRecordBox();
+                            box.add(record);
+                          }
+                        }),
+                    actions: [
+                      IconSlideAction(
+                        caption: '统计',
+                        color: Colors.green,
+                        icon: Icons.query_builder,
+                        onTap: () {
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (context) => StatisticsMonthView(
+                              clock: clock,
+                            ),
+                          ));
+                        },
+                      ),
+                    ],
+                    secondaryActions: [
+                      IconSlideAction(
+                        caption: '编辑',
+                        color: Colors.blue.shade400,
+                        icon: Icons.edit,
+                        foregroundColor: Colors.white,
+                        onTap: () async {
+                          await showDialog(
+                              context: context,
+                              builder: (BuildContext context) {
+                                var hasError = false;
+                                var advice = "";
+                                return StatefulBuilder(
+                                    builder: (context, setState) {
+                                  var textController = TextEditingController();
 
-                                      showAdvice(String text) {
-                                        setState(() {
-                                          hasError = true;
-                                          advice = text;
-                                        });
-                                      }
-
-                                      return AlertDialog(
-                                        title: const Text("修改名称"),
-                                        content: Column(
-                                          children: [
-                                            TextField(
-                                              controller: textController,
-                                              decoration: InputDecoration(
-                                                hintText: clock.name,
-                                              ),
-                                            ),
-                                            Container(
-                                              child: Visibility(
-                                                child: Text(
-                                                  advice,
-                                                  style: const TextStyle(
-                                                      color: Colors.red),
-                                                ),
-                                                visible: hasError,
-                                              ),
-                                              margin: const EdgeInsets.fromLTRB(
-                                                  0, 20, 0, 0),
-                                            )
-                                          ],
-                                          mainAxisSize: MainAxisSize.min,
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            child: const Text("确定"),
-                                            onPressed: () async {
-                                              var clockList =
-                                                  box.values.toList();
-                                              var name = textController.text;
-                                              if (name == clock.name) {
-                                                showAdvice("名称未改变");
-                                                return;
-                                              }
-                                              if (name.isEmpty) {
-                                                showAdvice("名称不能为空");
-                                                return;
-                                              }
-                                              var duplicate = clockList.any(
-                                                  (element) =>
-                                                      element.name == name);
-                                              if (duplicate) {
-                                                showAdvice("名称不能重复");
-                                                return;
-                                              }
-                                              int index = box.values
-                                                  .toList()
-                                                  .indexOf(clock);
-                                              clock.name = name;
-
-                                              try {
-                                                await updateClock(
-                                                    clock.id, clock.name);
-                                              } catch (e) {
-                                                var box = Hive.box<Activity>(
-                                                    "activity");
-                                                box.add(Activity(
-                                                    path:
-                                                        "${url.clock}/${clock.id}",
-                                                    method: "PATCH",
-                                                    data: {
-                                                      "name": clock.name
-                                                    }));
-                                              }
-                                              box.putAt(index, clock);
-                                              Navigator.of(context).pop();
-                                            },
-                                          ),
-                                        ],
-                                      );
+                                  showAdvice(String text) {
+                                    setState(() {
+                                      hasError = true;
+                                      advice = text;
                                     });
-                                  });
-                            },
-                          ),
-                          IconSlideAction(
-                            caption: '删除',
-                            color: Colors.red.shade400,
-                            icon: Icons.delete,
-                            onTap: () async {
-                              try {
-                                await deleteClock(clock.id);
-                              } catch (e) {
-                                var box = Hive.box<Activity>("activity");
-                                box.add(Activity(
-                                  path: "${url.clock}/${clock.id}",
-                                  method: "DELETE",
-                                ));
-                              }
-                              int index = box.values.toList().indexOf(clock);
-                              box.deleteAt(index);
-                            },
-                          ),
-                        ],
-                      );
+                                  }
 
-                      return slider;
-                    },
-                  )));
-          var emptyContent = Expanded(
-              child: Container(
-            child: Text(
-              "什么都没有",
-              style: TextStyle(fontSize: 30, color: Colors.grey[300]),
-            ),
-            alignment: Alignment.center,
-          ));
+                                  return AlertDialog(
+                                    title: const Text("修改名称"),
+                                    content: Column(
+                                      children: [
+                                        TextField(
+                                          controller: textController,
+                                          decoration: InputDecoration(
+                                            hintText: clock.name,
+                                          ),
+                                        ),
+                                        Container(
+                                          child: Visibility(
+                                            child: Text(
+                                              advice,
+                                              style: const TextStyle(
+                                                  color: Colors.red),
+                                            ),
+                                            visible: hasError,
+                                          ),
+                                          margin: const EdgeInsets.fromLTRB(
+                                              0, 20, 0, 0),
+                                        )
+                                      ],
+                                      mainAxisSize: MainAxisSize.min,
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        child: const Text("确定"),
+                                        onPressed: () async {
+                                          var clockList =
+                                              clockBox.values.toList();
+                                          var name = textController.text;
+                                          if (name == clock.name) {
+                                            showAdvice("名称未改变");
+                                            return;
+                                          }
+                                          if (name.isEmpty) {
+                                            showAdvice("名称不能为空");
+                                            return;
+                                          }
+                                          var duplicate = clockList.any(
+                                              (element) =>
+                                                  element.name == name);
+                                          if (duplicate) {
+                                            showAdvice("名称不能重复");
+                                            return;
+                                          }
+                                          int index = clockBox.values
+                                              .toList()
+                                              .indexOf(clock);
+                                          clock.name = name;
 
-          return Column(
-            children: [
-              toolBar,
-              clockList.isEmpty ? emptyContent : clockDetailList
-            ],
-          );
-        });
+                                          try {
+                                            var data = (await updateClock(
+                                                    clock.id, clock.name))
+                                                .data;
+                                            if (isSuccess(data)) {
+                                              storage.setActivity(
+                                                  getActivity(data));
+                                            }
+                                          } catch (e) {
+                                            var box = hive.getActivityBox();
+                                            box.add(hive.Activity(
+                                                path:
+                                                    "${url.clock}/${clock.id}",
+                                                method: patch,
+                                                data: {"name": clock.name},
+                                                target: clock.id,
+                                                box: hive.clock));
+                                          }
+                                          clockBox.putAt(index, clock);
+                                          Navigator.of(context).pop();
+                                        },
+                                      ),
+                                    ],
+                                  );
+                                });
+                              });
+                        },
+                      ),
+                      IconSlideAction(
+                        caption: '删除',
+                        color: Colors.red.shade400,
+                        icon: Icons.delete,
+                        onTap: () async {
+                          try {
+                            var data = (await deleteClock(clock.id)).data;
+                            if (isSuccess(data)) {
+                              storage.setActivity(getActivity(data));
+                            }
+                          } catch (e) {
+                            var box = hive.getActivityBox();
+                            box.add(hive.Activity(
+                                path: "${url.clock}/${clock.id}",
+                                method: delete,
+                                target: clock.id,
+                                box: hive.clock));
+                          }
+                          int index = clockBox.values.toList().indexOf(clock);
+                          clockBox.deleteAt(index);
+                        },
+                      ),
+                    ],
+                  );
+
+                  return slider;
+                },
+              )));
+      var emptyContent = Expanded(
+          child: Container(
+        child: Text(
+          "什么都没有",
+          style: TextStyle(fontSize: 30, color: Colors.grey[300]),
+        ),
+        alignment: Alignment.center,
+      ));
+
+      return Column(
+        children: [toolBar, clockList.isEmpty ? emptyContent : clockDetailList],
+      );
+    });
   }
 }
 
@@ -621,8 +608,10 @@ class _TimerViewState extends State<TimerView> {
                         onPressed: () {
                           if (start is DateTime) {
                             timer.onExecute.add(StopWatchExecute.stop);
-                            var record =
-                                Record(start: start, end: DateTime.now());
+                            var record = {
+                              "start": start,
+                              "end": DateTime.now()
+                            };
                             isEnd = true;
                             Navigator.of(context).pop(record);
                           } else {
@@ -679,7 +668,7 @@ class TimerButton extends StatelessWidget {
 }
 
 class StatisticsMonthView extends StatefulWidget {
-  Clock clock;
+  hive.Clock clock;
 
   StatisticsMonthView({required this.clock});
 
@@ -730,7 +719,11 @@ class _StatisticsMonthViewState extends State<StatisticsMonthView> {
         var currentMonth =
             details.visibleDates[details.visibleDates.length ~/ 2].month;
         bool isSameMonth = currentMonth == date.month;
-        bool hasRecord = widget.clock.records
+        bool hasRecord = hive
+            .getRecordBox()
+            .values
+            .toList()
+            .where((e) => e.clockId == widget.clock.id)
             .where((e) => _isSameDay(date, e.start) || _isSameDay(date, e.end))
             .isNotEmpty;
         var cell = Column(
@@ -784,7 +777,11 @@ class _StatisticsMonthViewState extends State<StatisticsMonthView> {
       },
     );
 
-    var recordList = widget.clock.records
+    var recordList = hive
+        .getRecordBox()
+        .values
+        .toList()
+        .where((e) => e.clockId == widget.clock.id)
         .where((e) =>
             _isSameDay(e.start, selectionTime) ||
             _isSameDay(e.end, selectionTime))

@@ -5,3 +5,4 @@ const withoutAuth = [register, login];
 
 const clock = "/clock";
 const record = "/record";
+const activity = "/activity";

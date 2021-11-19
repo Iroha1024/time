@@ -8,24 +8,17 @@ class Clock {
   int id;
 
   @HiveField(1)
-  String name;
+  int localId;
 
   @HiveField(2)
-  List<Record> records;
+  String name;
 
-  Clock({this.id = 0, required this.name, required this.records});
+  Clock({required this.id, required this.name}) : localId = id;
 
   Clock.fromJson(Map<String, dynamic> json)
-      : id = json["id"] ?? 0,
-        name = json["name"],
-        records =
-            (json["records"] as List).map((e) => Record.fromJson(e)).toList();
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'records': records.map((e) => e.toJson()).toList(),
-      };
+      : id = json["id"],
+        localId = json["id"],
+        name = json["name"];
 }
 
 @HiveType(typeId: 1)
@@ -34,23 +27,30 @@ class Record {
   int id;
 
   @HiveField(1)
-  DateTime start;
+  int localId;
 
   @HiveField(2)
+  DateTime start;
+
+  @HiveField(3)
   DateTime end;
 
-  Record({this.id = 0, required this.start, required this.end});
+  @HiveField(4)
+  int clockId;
+
+  Record(
+      {required this.id,
+      required this.start,
+      required this.end,
+      required this.clockId})
+      : localId = id;
 
   Record.fromJson(Map<String, dynamic> json)
-      : id = json["id"] ?? 0,
+      : id = json["id"],
+        localId = json["id"],
         start = DateTime.parse(json["start"]),
-        end = DateTime.parse(json["end"]);
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'start': start.toString(),
-        'end': end.toString(),
-      };
+        end = DateTime.parse(json["end"]),
+        clockId = json["clockId"];
 }
 
 @HiveType(typeId: 2)
@@ -65,11 +65,16 @@ class Activity {
   Map? data;
 
   @HiveField(3)
-  bool upload;
+  int target;
 
-  Activity(
-      {required this.path,
-      required this.method,
-      this.data,
-      this.upload = false});
+  @HiveField(4)
+  String box;
+
+  Activity({
+    required this.path,
+    required this.method,
+    this.data,
+    required this.target,
+    required this.box,
+  });
 }
