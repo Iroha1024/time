@@ -89,6 +89,8 @@ updateRequestId(
   return target.id;
 }
 
+// 若是patch 和 delete请求，id为负数（即为本地id）则替换
+// 若是post请求（新增操作），新增成功后更新本地id
 Future checkPush() async {
   var box = getActivityBox();
   List<int> successList = [];
@@ -112,7 +114,6 @@ Future checkPush() async {
         }
       }
     } catch (e) {
-      print(e);
       break;
     }
   }
@@ -127,7 +128,7 @@ Future checkPull() async {
   if (isSuccess(data)) {
     var activity = getActivity(data);
     storage.setActivity(activity);
-    if (data["data"]["clock"] == null) {
+    if (id == activity) {
       return;
     }
     var clock = data["data"]["clock"];

@@ -6,21 +6,26 @@ import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:stop_watch_timer/stop_watch_timer.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_login/flutter_login.dart';
+import 'package:oktoast/oktoast.dart';
 
 import 'package:time/api/index.dart';
 import 'package:time/hive/index.dart' as hive;
 import 'package:time/local_storage.dart' as storage;
 import 'package:time/api/url.dart' as url;
 
+check() async {
+  try {
+    await hive.checkPull();
+    await hive.checkPush();
+  } catch (e) {}
+}
+
 void main() async {
   await hive.initHive();
   await storage.init();
-  // await hive.checkPush();
-  // await hive.checkPull();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]);
@@ -43,7 +48,34 @@ void main() async {
   ));
 }
 
-class App extends StatelessWidget {
+class App extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() => _AppState();
+}
+
+class _AppState extends State<App> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance!.scheduleFrameCallback((timeStamp) async {
+      await check();
+    });
+    WidgetsBinding.instance!.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance!.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed) {
+      await check();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return View(
@@ -84,13 +116,19 @@ class LoginView extends StatelessWidget {
       future: storage.getUserName(),
       builder: (BuildContext context, AsyncSnapshot snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
-          return FlutterLogin(
+          return View(
+              child: FlutterLogin(
             title: 'TIME',
             // logo: AssetImage('assets/images/ecorp.png'),
             onLogin: (data) async {
-              var success = await storage.login(data.name, data.password);
-              if (success) {
-                Get.toNamed("/");
+              try {
+                var info = (await login(data.name, data.password)).data;
+                if (isSuccess(info)) {
+                  await storage.login(data.name, info["data"]);
+                  Get.toNamed("/");
+                }
+              } catch (e) {
+                return "账号或密码错误";
               }
             },
             onSignup: (_) => Future.delayed(Duration.zero),
@@ -116,7 +154,7 @@ class LoginView extends StatelessWidget {
                   'Lorem Ipsum is simply dummy text of the printing and typesetting industry',
               recoverPasswordSuccess: 'Password rescued successfully',
             ),
-          );
+          ));
         }
         return const CircularProgressIndicator();
       },
@@ -160,14 +198,6 @@ enum ToastColor { success, fail }
 
 class _HomeViewState extends State<HomeView> {
   var sliderController = SlidableController();
-  late FToast fToast;
-
-  @override
-  void initState() {
-    super.initState();
-    fToast = FToast();
-    fToast.init(context);
-  }
 
   _formatTime(int millisecond) {
     int s = (millisecond / 1000).floor();
@@ -176,37 +206,6 @@ class _HomeViewState extends State<HomeView> {
     int m = (s / 60).floor();
     s = s % 60;
     return "$h时$m分$s秒";
-  }
-
-  _showToast(String text, ToastColor status) {
-    Color color;
-    switch (status) {
-      case ToastColor.success:
-        color = Colors.green[300]!;
-        break;
-      case ToastColor.fail:
-        color = Colors.red[300]!;
-        break;
-    }
-
-    Widget toast = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(5),
-        color: color,
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(color: Colors.white),
-      ),
-    );
-
-    fToast.showToast(
-        child: toast,
-        toastDuration: const Duration(seconds: 1),
-        positionedToastBuilder: (context, child) {
-          return child;
-        });
   }
 
   @override
